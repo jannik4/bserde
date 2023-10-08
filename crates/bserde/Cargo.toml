@@ -1,0 +1,11 @@
+[package]
+name = "bserde"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bserde_derive = { path = "../bserde_derive", optional = true }
+
+[features]
+default = ["derive"]
+derive = ["dep:bserde_derive"]
