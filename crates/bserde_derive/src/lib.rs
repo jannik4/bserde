@@ -7,6 +7,71 @@ use syn::{
     Generics, Ident, ImplGenerics, Index, LitInt, Result, Token, TypeGenerics, WhereClause,
 };
 
+#[proc_macro_derive(SerializeAsBytes, attributes(trailing_padding, padding))]
+pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    fn inner(input: TokenStream) -> Result<TokenStream> {
+        // Parse derive
+        let (name, fields, generics, trailing_padding) = parse_derive(input)?;
+
+        // Generics
+        let (impl_generics, ty_generics, where_clause) =
+            build_generics(&generics, &fields, quote!(::bserde::SerializeAsBytes));
+
+        // Serialize fields
+        let serialized_fields_ne =
+            serialize_fields(&fields, &Ident::new("serialize_ne", Span::call_site()))?;
+        let serialized_fields_le =
+            serialize_fields(&fields, &Ident::new("serialize_le", Span::call_site()))?;
+        let serialized_fields_be =
+            serialize_fields(&fields, &Ident::new("serialize_be", Span::call_site()))?;
+
+        // Serialize trailing padding
+        let serialize_trailing_padding = match trailing_padding {
+            0 => None,
+            n => Some(quote! { write.write_all(&[0; #n])?; }),
+        };
+
+        Ok(quote! {
+            impl #impl_generics ::bserde::SerializeAsBytes for #name #ty_generics #where_clause {
+                fn serialize_ne<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                    // Serialize fields
+                    #serialized_fields_ne
+
+                    // Serialize trailing padding
+                    #serialize_trailing_padding
+
+                    Ok(())
+                }
+
+                fn serialize_le<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                    // Serialize fields
+                    #serialized_fields_le
+
+                    // Serialize trailing padding
+                    #serialize_trailing_padding
+
+                    Ok(())
+                }
+
+                fn serialize_be<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                    // Serialize fields
+                    #serialized_fields_be
+
+                    // Serialize trailing padding
+                    #serialize_trailing_padding
+
+                    Ok(())
+                }
+            }
+        })
+    }
+
+    match inner(input.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
 #[proc_macro_derive(DeserializeFromBytes, attributes(trailing_padding, padding))]
 pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     fn inner(input: TokenStream) -> Result<TokenStream> {
@@ -98,71 +163,6 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
     }
 }
 
-#[proc_macro_derive(SerializeAsBytes, attributes(trailing_padding, padding))]
-pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    fn inner(input: TokenStream) -> Result<TokenStream> {
-        // Parse derive
-        let (name, fields, generics, trailing_padding) = parse_derive(input)?;
-
-        // Generics
-        let (impl_generics, ty_generics, where_clause) =
-            build_generics(&generics, &fields, quote!(::bserde::SerializeAsBytes));
-
-        // Serialize fields
-        let serialized_fields_ne =
-            serialize_fields(&fields, &Ident::new("serialize_ne", Span::call_site()))?;
-        let serialized_fields_le =
-            serialize_fields(&fields, &Ident::new("serialize_le", Span::call_site()))?;
-        let serialized_fields_be =
-            serialize_fields(&fields, &Ident::new("serialize_be", Span::call_site()))?;
-
-        // Serialize trailing padding
-        let serialize_trailing_padding = match trailing_padding {
-            0 => None,
-            n => Some(quote! { write.write_all(&[0; #n])?; }),
-        };
-
-        Ok(quote! {
-            impl #impl_generics ::bserde::SerializeAsBytes for #name #ty_generics #where_clause {
-                fn serialize_ne<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
-                    // Serialize fields
-                    #serialized_fields_ne
-
-                    // Serialize trailing padding
-                    #serialize_trailing_padding
-
-                    Ok(())
-                }
-
-                fn serialize_le<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
-                    // Serialize fields
-                    #serialized_fields_le
-
-                    // Serialize trailing padding
-                    #serialize_trailing_padding
-
-                    Ok(())
-                }
-
-                fn serialize_be<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
-                    // Serialize fields
-                    #serialized_fields_be
-
-                    // Serialize trailing padding
-                    #serialize_trailing_padding
-
-                    Ok(())
-                }
-            }
-        })
-    }
-
-    match inner(input.into()) {
-        Ok(tokens) => tokens.into(),
-        Err(e) => e.to_compile_error().into(),
-    }
-}
-
 fn parse_derive(input: TokenStream) -> Result<(Ident, Vec<Field>, Generics, usize)> {
     let ast = syn::parse2::<DeriveInput>(input)?;
 
@@ -206,6 +206,31 @@ fn build_generics<'a>(
     (impl_generics, ty_generics, where_clause)
 }
 
+fn serialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
+    fields
+        .iter()
+        .enumerate()
+        .map(|(idx, field)| {
+            let serialize_padding = match calc_padding(&field.attrs, "padding")? {
+                0 => None,
+                n => Some(quote! { write.write_all(&[0; #n])?; }),
+            };
+            let ident = match &field.ident {
+                Some(ident) => quote!(#ident),
+                None => {
+                    let idx = Index::from(idx);
+                    quote!(#idx)
+                }
+            };
+
+            Ok(quote! {
+                #serialize_padding
+                ::bserde::SerializeAsBytes::#method(&self.#ident, &mut write)?;
+            })
+        })
+        .collect::<Result<TokenStream>>()
+}
+
 fn deserialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
     fields
         .iter()
@@ -230,31 +255,6 @@ fn deserialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
                 #[allow(non_snake_case)]
                 let #deserialized_name =
                     <#ty as ::bserde::DeserializeFromBytes>::#method(&mut read)?;
-            })
-        })
-        .collect::<Result<TokenStream>>()
-}
-
-fn serialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
-    fields
-        .iter()
-        .enumerate()
-        .map(|(idx, field)| {
-            let serialize_padding = match calc_padding(&field.attrs, "padding")? {
-                0 => None,
-                n => Some(quote! { write.write_all(&[0; #n])?; }),
-            };
-            let ident = match &field.ident {
-                Some(ident) => quote!(#ident),
-                None => {
-                    let idx = Index::from(idx);
-                    quote!(#idx)
-                }
-            };
-
-            Ok(quote! {
-                #serialize_padding
-                ::bserde::SerializeAsBytes::#method(&self.#ident, &mut write)?;
             })
         })
         .collect::<Result<TokenStream>>()

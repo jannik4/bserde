@@ -1,6 +1,6 @@
 use bserde::{DeserializeFromBytes, SerializeAsBytes};
 
-#[derive(Debug, DeserializeFromBytes, SerializeAsBytes)]
+#[derive(Debug, SerializeAsBytes, DeserializeFromBytes)]
 struct TestA {
     a: u8,
     b: u16,
@@ -8,7 +8,7 @@ struct TestA {
     d: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DeserializeFromBytes, SerializeAsBytes)]
+#[derive(Debug, PartialEq, Eq, SerializeAsBytes, DeserializeFromBytes)]
 #[trailing_padding(0xA)]
 struct TestB<T, U> {
     a: u8,
@@ -22,15 +22,15 @@ struct TestB<T, U> {
     _xxx: Xxx<U>,
 }
 
-#[derive(Debug, PartialEq, Eq, DeserializeFromBytes, SerializeAsBytes)]
+#[derive(Debug, PartialEq, Eq, SerializeAsBytes, DeserializeFromBytes)]
 struct Xxx<T> {
     _marker: std::marker::PhantomData<T>,
 }
 
-#[derive(Debug, DeserializeFromBytes, SerializeAsBytes)]
+#[derive(Debug, SerializeAsBytes, DeserializeFromBytes)]
 struct TestUnit;
 
-#[derive(Debug, DeserializeFromBytes, SerializeAsBytes)]
+#[derive(Debug, SerializeAsBytes, DeserializeFromBytes)]
 struct TestTupleStruct(u8, #[padding(4)] u32, bool);
 
 #[allow(unused)]
