@@ -1,9 +1,19 @@
 #![deny(rust_2018_idioms)]
 
 use std::{
-    io::{Read, Result, Write},
+    borrow::Cow,
+    collections::VecDeque,
+    io::{ErrorKind, Read, Result, Write},
     marker::PhantomData,
     mem::{self, MaybeUninit},
+    num::{
+        NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
+        NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize, Wrapping,
+    },
+    sync::atomic::{
+        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16, AtomicU32,
+        AtomicU64, AtomicU8, AtomicUsize, Ordering,
+    },
 };
 
 #[cfg(feature = "derive")]
@@ -105,6 +115,41 @@ where
     }
 }
 
+impl<T> SerializeAsBytes for Cow<'_, T>
+where
+    T: SerializeAsBytes + ToOwned,
+{
+    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+        (**self).serialize_ne(write)
+    }
+
+    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+        (**self).serialize_le(write)
+    }
+
+    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+        (**self).serialize_be(write)
+    }
+}
+
+impl<T> DeserializeFromBytes for Cow<'_, T>
+where
+    T: ToOwned,
+    <T as ToOwned>::Owned: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+        Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_ne(read)?))
+    }
+
+    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+        Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_le(read)?))
+    }
+
+    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+        Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_be(read)?))
+    }
+}
+
 impl<T> SerializeAsBytes for PhantomData<T> {
     fn serialize_ne<W: Write>(&self, _write: W) -> Result<()> {
         Ok(())
@@ -176,6 +221,32 @@ where
     }
 }
 
+impl<T> SerializeAsBytes for VecDeque<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+        for item in self {
+            item.serialize_ne(&mut write)?;
+        }
+        Ok(())
+    }
+
+    fn serialize_le<W: Write>(&self, mut write: W) -> Result<()> {
+        for item in self {
+            item.serialize_le(&mut write)?;
+        }
+        Ok(())
+    }
+
+    fn serialize_be<W: Write>(&self, mut write: W) -> Result<()> {
+        for item in self {
+            item.serialize_be(&mut write)?;
+        }
+        Ok(())
+    }
+}
+
 impl<const N: usize, T> SerializeAsBytes for [T; N]
 where
     T: SerializeAsBytes,
@@ -229,6 +300,40 @@ where
 
     fn deserialize_be<R: Read>(mut read: R) -> Result<Self> {
         deserialize_array!(read, deserialize_be)
+    }
+}
+
+impl<T> SerializeAsBytes for Wrapping<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+        self.0.serialize_ne(write)
+    }
+
+    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+        self.0.serialize_le(write)
+    }
+
+    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+        self.0.serialize_be(write)
+    }
+}
+
+impl<T> DeserializeFromBytes for Wrapping<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+        Ok(Wrapping(T::deserialize_ne(read)?))
+    }
+
+    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+        Ok(Wrapping(T::deserialize_le(read)?))
+    }
+
+    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+        Ok(Wrapping(T::deserialize_be(read)?))
     }
 }
 
@@ -320,6 +425,104 @@ impl_number!(isize, std::mem::size_of::<isize>());
 
 impl_number!(f32, 4);
 impl_number!(f64, 8);
+
+macro_rules! impl_number_non_zero {
+    ($t:ty) => {
+        impl SerializeAsBytes for $t {
+            fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+                self.get().serialize_ne(write)
+            }
+
+            fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+                self.get().serialize_le(write)
+            }
+
+            fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+                self.get().serialize_be(write)
+            }
+        }
+
+        impl DeserializeFromBytes for $t {
+            fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_ne(read)?;
+                Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
+            }
+
+            fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_le(read)?;
+                Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
+            }
+
+            fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_be(read)?;
+                Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
+            }
+        }
+    };
+}
+
+impl_number_non_zero!(NonZeroU8);
+impl_number_non_zero!(NonZeroU16);
+impl_number_non_zero!(NonZeroU32);
+impl_number_non_zero!(NonZeroU64);
+impl_number_non_zero!(NonZeroU128);
+impl_number_non_zero!(NonZeroUsize);
+
+impl_number_non_zero!(NonZeroI8);
+impl_number_non_zero!(NonZeroI16);
+impl_number_non_zero!(NonZeroI32);
+impl_number_non_zero!(NonZeroI64);
+impl_number_non_zero!(NonZeroI128);
+impl_number_non_zero!(NonZeroIsize);
+
+macro_rules! impl_atomic {
+    ($t:ty) => {
+        impl SerializeAsBytes for $t {
+            fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+                self.load(Ordering::Relaxed).serialize_ne(write)
+            }
+
+            fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+                self.load(Ordering::Relaxed).serialize_le(write)
+            }
+
+            fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+                self.load(Ordering::Relaxed).serialize_be(write)
+            }
+        }
+
+        impl DeserializeFromBytes for $t {
+            fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_ne(read)?;
+                Ok(Self::new(inner))
+            }
+
+            fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_le(read)?;
+                Ok(Self::new(inner))
+            }
+
+            fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+                let inner = DeserializeFromBytes::deserialize_be(read)?;
+                Ok(Self::new(inner))
+            }
+        }
+    };
+}
+
+impl_atomic!(AtomicBool);
+
+impl_atomic!(AtomicU8);
+impl_atomic!(AtomicU16);
+impl_atomic!(AtomicU32);
+impl_atomic!(AtomicU64);
+impl_atomic!(AtomicUsize);
+
+impl_atomic!(AtomicI8);
+impl_atomic!(AtomicI16);
+impl_atomic!(AtomicI32);
+impl_atomic!(AtomicI64);
+impl_atomic!(AtomicIsize);
 
 macro_rules! impl_tuple {
     (rec: $field:tt $type:ident, $($rec_field:tt $rec_type:ident),* $(,)?) => {
