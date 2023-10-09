@@ -59,6 +59,9 @@ mod tests {
             _xxx: Xxx { _marker: std::marker::PhantomData },
         };
 
-        assert_eq!(test_b, TestB::deserialize_ne(test_b.serialize_ne_to_vec().as_slice()).unwrap());
+        assert_eq!(
+            test_b,
+            TestB::deserialize_ne(&mut test_b.serialize_ne_to_vec().as_slice()).unwrap()
+        );
     }
 }

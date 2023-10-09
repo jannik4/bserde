@@ -33,7 +33,7 @@ pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::
 
         Ok(quote! {
             impl #impl_generics ::bserde::SerializeAsBytes for #name #ty_generics #where_clause {
-                fn serialize_ne<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                fn serialize_ne<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
                     // Serialize fields
                     #serialized_fields_ne
 
@@ -43,7 +43,7 @@ pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::
                     Ok(())
                 }
 
-                fn serialize_le<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                fn serialize_le<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
                     // Serialize fields
                     #serialized_fields_le
 
@@ -53,7 +53,7 @@ pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::
                     Ok(())
                 }
 
-                fn serialize_be<W: ::std::io::Write>(&self, mut write: W) -> ::std::io::Result<()> {
+                fn serialize_be<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
                     // Serialize fields
                     #serialized_fields_be
 
@@ -124,7 +124,7 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
 
         Ok(quote! {
             impl #impl_generics ::bserde::DeserializeFromBytes for #name #ty_generics #where_clause {
-                fn deserialize_ne<R: ::std::io::Read>(mut read: R) -> ::std::io::Result<Self> {
+                fn deserialize_ne<R: ::std::io::Read>(read: &mut R) -> ::std::io::Result<Self> {
                     // Deserialize fields
                     #deserialized_fields_ne
 
@@ -134,7 +134,7 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
                     #ret
                 }
 
-                fn deserialize_le<R: ::std::io::Read>(mut read: R) -> ::std::io::Result<Self> {
+                fn deserialize_le<R: ::std::io::Read>(read: &mut R) -> ::std::io::Result<Self> {
                     // Deserialize fields
                     #deserialized_fields_le
 
@@ -144,7 +144,7 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
                     #ret
                 }
 
-                fn deserialize_be<R: ::std::io::Read>(mut read: R) -> ::std::io::Result<Self> {
+                fn deserialize_be<R: ::std::io::Read>(read: &mut R) -> ::std::io::Result<Self> {
                     // Deserialize fields
                     #deserialized_fields_be
 
@@ -225,7 +225,7 @@ fn serialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
 
             Ok(quote! {
                 #serialize_padding
-                ::bserde::SerializeAsBytes::#method(&self.#ident, &mut write)?;
+                ::bserde::SerializeAsBytes::#method(&self.#ident, write)?;
             })
         })
         .collect::<Result<TokenStream>>()
@@ -254,7 +254,7 @@ fn deserialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
                 #deserialize_padding
                 #[allow(non_snake_case)]
                 let #deserialized_name =
-                    <#ty as ::bserde::DeserializeFromBytes>::#method(&mut read)?;
+                    <#ty as ::bserde::DeserializeFromBytes>::#method(read)?;
             })
         })
         .collect::<Result<TokenStream>>()

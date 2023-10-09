@@ -20,9 +20,9 @@ use std::{
 pub use bserde_derive::{DeserializeFromBytes, SerializeAsBytes};
 
 pub trait SerializeAsBytes {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()>;
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()>;
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()>;
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()>;
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()>;
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()>;
 
     fn serialize_ne_to_vec(&self) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -42,24 +42,24 @@ pub trait SerializeAsBytes {
 }
 
 pub trait DeserializeFromBytes: Sized {
-    fn deserialize_ne<R: Read>(read: R) -> Result<Self>;
-    fn deserialize_le<R: Read>(read: R) -> Result<Self>;
-    fn deserialize_be<R: Read>(read: R) -> Result<Self>;
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self>;
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self>;
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self>;
 }
 
 impl<T> SerializeAsBytes for &T
 where
     T: ?Sized + SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_be(write)
     }
 }
@@ -68,15 +68,15 @@ impl<T> SerializeAsBytes for &mut T
 where
     T: ?Sized + SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_be(write)
     }
 }
@@ -85,15 +85,15 @@ impl<T> SerializeAsBytes for Box<T>
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_be(write)
     }
 }
@@ -102,15 +102,15 @@ impl<T> DeserializeFromBytes for Box<T>
 where
     T: DeserializeFromBytes,
 {
-    fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Box::new(T::deserialize_ne(read)?))
     }
 
-    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Box::new(T::deserialize_le(read)?))
     }
 
-    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Box::new(T::deserialize_be(read)?))
     }
 }
@@ -119,15 +119,15 @@ impl<T> SerializeAsBytes for Cow<'_, T>
 where
     T: SerializeAsBytes + ToOwned,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         (**self).serialize_be(write)
     }
 }
@@ -137,43 +137,43 @@ where
     T: ToOwned,
     <T as ToOwned>::Owned: DeserializeFromBytes,
 {
-    fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_ne(read)?))
     }
 
-    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_le(read)?))
     }
 
-    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Cow::Owned(<T as ToOwned>::Owned::deserialize_be(read)?))
     }
 }
 
 impl<T> SerializeAsBytes for PhantomData<T> {
-    fn serialize_ne<W: Write>(&self, _write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, _write: &mut W) -> Result<()> {
         Ok(())
     }
 
-    fn serialize_le<W: Write>(&self, _write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, _write: &mut W) -> Result<()> {
         Ok(())
     }
 
-    fn serialize_be<W: Write>(&self, _write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, _write: &mut W) -> Result<()> {
         Ok(())
     }
 }
 
 impl<T> DeserializeFromBytes for PhantomData<T> {
-    fn deserialize_ne<R: Read>(_read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(_read: &mut R) -> Result<Self> {
         Ok(Self)
     }
 
-    fn deserialize_le<R: Read>(_read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(_read: &mut R) -> Result<Self> {
         Ok(Self)
     }
 
-    fn deserialize_be<R: Read>(_read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(_read: &mut R) -> Result<Self> {
         Ok(Self)
     }
 }
@@ -182,23 +182,23 @@ impl<T> SerializeAsBytes for [T]
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_ne(&mut write)?;
+            item.serialize_ne(write)?;
         }
         Ok(())
     }
 
-    fn serialize_le<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_le(&mut write)?;
+            item.serialize_le(write)?;
         }
         Ok(())
     }
 
-    fn serialize_be<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_be(&mut write)?;
+            item.serialize_be(write)?;
         }
         Ok(())
     }
@@ -208,15 +208,15 @@ impl<T> SerializeAsBytes for Vec<T>
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_be(write)
     }
 }
@@ -225,23 +225,23 @@ impl<T> SerializeAsBytes for VecDeque<T>
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_ne(&mut write)?;
+            item.serialize_ne(write)?;
         }
         Ok(())
     }
 
-    fn serialize_le<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_le(&mut write)?;
+            item.serialize_le(write)?;
         }
         Ok(())
     }
 
-    fn serialize_be<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         for item in self {
-            item.serialize_be(&mut write)?;
+            item.serialize_be(write)?;
         }
         Ok(())
     }
@@ -251,15 +251,15 @@ impl<const N: usize, T> SerializeAsBytes for [T; N]
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         self.as_slice().serialize_be(write)
     }
 }
@@ -268,7 +268,7 @@ macro_rules! deserialize_array {
     ($read:expr, $method:ident) => {{
         let mut data: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
         for i in 0..N {
-            let value = match T::$method(&mut $read) {
+            let value = match T::$method($read) {
                 Ok(value) => value,
                 Err(err) => {
                     for elem in &mut data[0..i] {
@@ -290,15 +290,15 @@ impl<const N: usize, T> DeserializeFromBytes for [T; N]
 where
     T: DeserializeFromBytes,
 {
-    fn deserialize_ne<R: Read>(mut read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
         deserialize_array!(read, deserialize_ne)
     }
 
-    fn deserialize_le<R: Read>(mut read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
         deserialize_array!(read, deserialize_le)
     }
 
-    fn deserialize_be<R: Read>(mut read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         deserialize_array!(read, deserialize_be)
     }
 }
@@ -307,15 +307,15 @@ impl<T> SerializeAsBytes for Wrapping<T>
 where
     T: SerializeAsBytes,
 {
-    fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         self.0.serialize_ne(write)
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         self.0.serialize_le(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         self.0.serialize_be(write)
     }
 }
@@ -324,46 +324,46 @@ impl<T> DeserializeFromBytes for Wrapping<T>
 where
     T: DeserializeFromBytes,
 {
-    fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Wrapping(T::deserialize_ne(read)?))
     }
 
-    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Wrapping(T::deserialize_le(read)?))
     }
 
-    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Wrapping(T::deserialize_be(read)?))
     }
 }
 
 impl SerializeAsBytes for bool {
-    fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
         write.write_all(&[*self as u8])?;
         Ok(())
     }
 
-    fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
         self.serialize_ne(write)
     }
 
-    fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
         self.serialize_ne(write)
     }
 }
 
 impl DeserializeFromBytes for bool {
-    fn deserialize_ne<R: Read>(mut read: R) -> Result<Self> {
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
         let mut buf = [0; 1];
         read.read_exact(&mut buf)?;
         Ok(buf[0] != 0)
     }
 
-    fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
         Self::deserialize_ne(read)
     }
 
-    fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         Self::deserialize_ne(read)
     }
 }
@@ -371,36 +371,36 @@ impl DeserializeFromBytes for bool {
 macro_rules! impl_number {
     ($t:ty, $bytes:expr) => {
         impl SerializeAsBytes for $t {
-            fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
                 write.write_all(&self.to_ne_bytes())?;
                 Ok(())
             }
 
-            fn serialize_le<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
                 write.write_all(&self.to_le_bytes())?;
                 Ok(())
             }
 
-            fn serialize_be<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
                 write.write_all(&self.to_be_bytes())?;
                 Ok(())
             }
         }
 
         impl DeserializeFromBytes for $t {
-            fn deserialize_ne<R: Read>(mut read: R) -> Result<Self> {
+            fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
                 let mut buf = [0; $bytes];
                 read.read_exact(&mut buf)?;
                 Ok(Self::from_ne_bytes(buf))
             }
 
-            fn deserialize_le<R: Read>(mut read: R) -> Result<Self> {
+            fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
                 let mut buf = [0; $bytes];
                 read.read_exact(&mut buf)?;
                 Ok(Self::from_le_bytes(buf))
             }
 
-            fn deserialize_be<R: Read>(mut read: R) -> Result<Self> {
+            fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
                 let mut buf = [0; $bytes];
                 read.read_exact(&mut buf)?;
                 Ok(Self::from_be_bytes(buf))
@@ -429,31 +429,31 @@ impl_number!(f64, 8);
 macro_rules! impl_number_non_zero {
     ($t:ty) => {
         impl SerializeAsBytes for $t {
-            fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.get().serialize_ne(write)
             }
 
-            fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.get().serialize_le(write)
             }
 
-            fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.get().serialize_be(write)
             }
         }
 
         impl DeserializeFromBytes for $t {
-            fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_ne(read)?;
                 Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
             }
 
-            fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_le(read)?;
                 Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
             }
 
-            fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_be(read)?;
                 Self::new(inner).ok_or_else(|| ErrorKind::InvalidData.into())
             }
@@ -478,31 +478,31 @@ impl_number_non_zero!(NonZeroIsize);
 macro_rules! impl_atomic {
     ($t:ty) => {
         impl SerializeAsBytes for $t {
-            fn serialize_ne<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.load(Ordering::Relaxed).serialize_ne(write)
             }
 
-            fn serialize_le<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.load(Ordering::Relaxed).serialize_le(write)
             }
 
-            fn serialize_be<W: Write>(&self, write: W) -> Result<()> {
+            fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
                 self.load(Ordering::Relaxed).serialize_be(write)
             }
         }
 
         impl DeserializeFromBytes for $t {
-            fn deserialize_ne<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_ne(read)?;
                 Ok(Self::new(inner))
             }
 
-            fn deserialize_le<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_le(read)?;
                 Ok(Self::new(inner))
             }
 
-            fn deserialize_be<R: Read>(read: R) -> Result<Self> {
+            fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
                 let inner = DeserializeFromBytes::deserialize_be(read)?;
                 Ok(Self::new(inner))
             }
@@ -538,21 +538,21 @@ macro_rules! impl_tuple {
         where
             $($type: SerializeAsBytes,)*
         {
-            fn serialize_ne<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
                 let ($($field,)*) = self;
-                $($field.serialize_ne(&mut write)?;)*
+                $($field.serialize_ne(write)?;)*
                 Ok(())
             }
 
-            fn serialize_le<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
                 let ($($field,)*) = self;
-                $($field.serialize_le(&mut write)?;)*
+                $($field.serialize_le(write)?;)*
                 Ok(())
             }
 
-            fn serialize_be<W: Write>(&self, mut write: W) -> Result<()> {
+            fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
                 let ($($field,)*) = self;
-                $($field.serialize_be(&mut write)?;)*
+                $($field.serialize_be(write)?;)*
                 Ok(())
             }
         }
@@ -562,16 +562,16 @@ macro_rules! impl_tuple {
         where
             $($type: DeserializeFromBytes,)*
         {
-            fn deserialize_ne<R: Read>(mut read: R) -> Result<Self> {
-                Ok(($($type::deserialize_ne(&mut read)?,)*))
+            fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+                Ok(($($type::deserialize_ne(read)?,)*))
             }
 
-            fn deserialize_le<R: Read>(mut read: R) -> Result<Self> {
-                Ok(($($type::deserialize_le(&mut read)?,)*))
+            fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+                Ok(($($type::deserialize_le(read)?,)*))
             }
 
-            fn deserialize_be<R: Read>(mut read: R) -> Result<Self> {
-                Ok(($($type::deserialize_be(&mut read)?,)*))
+            fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+                Ok(($($type::deserialize_be(read)?,)*))
             }
         }
     };
