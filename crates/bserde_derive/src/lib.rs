@@ -274,7 +274,7 @@ fn calc_padding(attrs: &[Attribute], padding_name: &str) -> Result<usize> {
             let n = lit.base10_parse::<usize>()?;
 
             padding = padding.checked_add(n).ok_or_else(|| {
-                Error::new(attr.span(), format!("overflowing {padding_name} attribute"))
+                Error::new(lit.span(), format!("overflowing {padding_name} attribute"))
             })?;
         }
     }
