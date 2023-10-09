@@ -265,6 +265,12 @@ fn calc_padding(attrs: &[Attribute], padding_name: &str) -> Result<usize> {
     for attr in attrs {
         if attr.path().is_ident(padding_name) {
             let lit = attr.parse_args::<LitInt>()?;
+            if lit.suffix() != "" {
+                return Err(Error::new(
+                    lit.span(),
+                    format!("unexpected suffix `{}`", lit.suffix()),
+                ));
+            }
             let n = lit.base10_parse::<usize>()?;
 
             padding = padding.checked_add(n).ok_or_else(|| {
