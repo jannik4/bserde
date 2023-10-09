@@ -10,6 +10,7 @@ use std::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
         NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize, Wrapping,
     },
+    ops::{Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive},
     sync::atomic::{
         AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16, AtomicU32,
         AtomicU64, AtomicU8, AtomicUsize, Ordering,
@@ -112,6 +113,216 @@ where
 
     fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
         Ok(Box::new(T::deserialize_be(read)?))
+    }
+}
+
+impl<T> SerializeAsBytes for Range<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_ne(write)?;
+        self.end.serialize_ne(write)?;
+        Ok(())
+    }
+
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_le(write)?;
+        self.end.serialize_le(write)?;
+        Ok(())
+    }
+
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_be(write)?;
+        self.end.serialize_be(write)?;
+        Ok(())
+    }
+}
+
+impl<T> DeserializeFromBytes for Range<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_ne(read)?, end: T::deserialize_ne(read)? })
+    }
+
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_le(read)?, end: T::deserialize_le(read)? })
+    }
+
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_be(read)?, end: T::deserialize_be(read)? })
+    }
+}
+
+impl<T> SerializeAsBytes for RangeFrom<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_ne(write)
+    }
+
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_le(write)
+    }
+
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start.serialize_be(write)
+    }
+}
+
+impl<T> DeserializeFromBytes for RangeFrom<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_ne(read)? })
+    }
+
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_le(read)? })
+    }
+
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { start: T::deserialize_be(read)? })
+    }
+}
+
+impl SerializeAsBytes for RangeFull {
+    fn serialize_ne<W: Write>(&self, _write: &mut W) -> Result<()> {
+        Ok(())
+    }
+
+    fn serialize_le<W: Write>(&self, _write: &mut W) -> Result<()> {
+        Ok(())
+    }
+
+    fn serialize_be<W: Write>(&self, _write: &mut W) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl DeserializeFromBytes for RangeFull {
+    fn deserialize_ne<R: Read>(_read: &mut R) -> Result<Self> {
+        Ok(Self)
+    }
+
+    fn deserialize_le<R: Read>(_read: &mut R) -> Result<Self> {
+        Ok(Self)
+    }
+
+    fn deserialize_be<R: Read>(_read: &mut R) -> Result<Self> {
+        Ok(Self)
+    }
+}
+
+impl<T> SerializeAsBytes for RangeInclusive<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start().serialize_ne(write)?;
+        self.end().serialize_ne(write)?;
+        Ok(())
+    }
+
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start().serialize_le(write)?;
+        self.end().serialize_le(write)?;
+        Ok(())
+    }
+
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.start().serialize_be(write)?;
+        self.end().serialize_be(write)?;
+        Ok(())
+    }
+}
+
+impl<T> DeserializeFromBytes for RangeInclusive<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self::new(T::deserialize_ne(read)?, T::deserialize_ne(read)?))
+    }
+
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self::new(T::deserialize_le(read)?, T::deserialize_le(read)?))
+    }
+
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self::new(T::deserialize_be(read)?, T::deserialize_be(read)?))
+    }
+}
+
+impl<T> SerializeAsBytes for RangeTo<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_ne(write)
+    }
+
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_le(write)
+    }
+
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_be(write)
+    }
+}
+
+impl<T> DeserializeFromBytes for RangeTo<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_ne(read)? })
+    }
+
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_le(read)? })
+    }
+
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_be(read)? })
+    }
+}
+
+impl<T> SerializeAsBytes for RangeToInclusive<T>
+where
+    T: SerializeAsBytes,
+{
+    fn serialize_ne<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_ne(write)
+    }
+
+    fn serialize_le<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_le(write)
+    }
+
+    fn serialize_be<W: Write>(&self, write: &mut W) -> Result<()> {
+        self.end.serialize_be(write)
+    }
+}
+
+impl<T> DeserializeFromBytes for RangeToInclusive<T>
+where
+    T: DeserializeFromBytes,
+{
+    fn deserialize_ne<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_ne(read)? })
+    }
+
+    fn deserialize_le<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_le(read)? })
+    }
+
+    fn deserialize_be<R: Read>(read: &mut R) -> Result<Self> {
+        Ok(Self { end: T::deserialize_be(read)? })
     }
 }
 
