@@ -27,10 +27,18 @@ struct Xxx<T> {
     _marker: std::marker::PhantomData<T>,
 }
 
+#[derive(Debug, DeserializeFromBytes, SerializeAsBytes)]
+struct TestUnit;
+
+#[derive(Debug, DeserializeFromBytes, SerializeAsBytes)]
+struct TestTupleStruct(u8, #[padding(4)] u32, bool);
+
 #[allow(unused)]
 fn assert_implementations() {
     assert_has_impl::<TestA>();
     assert_has_impl::<TestB<u8, String>>();
+    assert_has_impl::<TestUnit>();
+    assert_has_impl::<TestTupleStruct>();
 }
 
 fn assert_has_impl<T: DeserializeFromBytes + SerializeAsBytes>() {}

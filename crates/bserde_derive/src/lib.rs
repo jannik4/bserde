@@ -3,41 +3,21 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
-    punctuated::Punctuated, spanned::Spanned, Attribute, Data, DeriveInput, Error, Fields,
-    FieldsNamed, Generics, Ident, LitInt, Result, Token, WhereClause,
+    punctuated::Punctuated, spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, Fields,
+    Generics, Ident, ImplGenerics, Index, LitInt, Result, Token, TypeGenerics, WhereClause,
 };
 
 #[proc_macro_derive(DeserializeFromBytes, attributes(trailing_padding, padding))]
 pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     fn inner(input: TokenStream) -> Result<TokenStream> {
         // Parse derive
-        let (name, data, generics, trailing_padding) = parse_derive(input)?;
+        let (name, fields, generics, trailing_padding) = parse_derive(input)?;
 
         // Generics
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-        let mut where_clause = where_clause.cloned().unwrap_or_else(|| WhereClause {
-            where_token: <Token![where]>::default(),
-            predicates: Punctuated::new(),
-        });
+        let (impl_generics, ty_generics, where_clause) =
+            build_generics(&generics, &fields, quote!(::bserde::DeserializeFromBytes));
 
         // Deserialize fields
-        let fields = match data {
-            Data::Struct(data) => match data.fields {
-                Fields::Named(fields) => fields,
-                Fields::Unnamed(_) => {
-                    return Err(Error::new(Span::call_site(), "only named structs are supported"))
-                }
-                Fields::Unit => {
-                    return Err(Error::new(Span::call_site(), "only named structs are supported"))
-                }
-            },
-            Data::Enum(_) => {
-                return Err(Error::new(Span::call_site(), "only named structs are supported"))
-            }
-            Data::Union(_) => {
-                return Err(Error::new(Span::call_site(), "only named structs are supported"))
-            }
-        };
         let deserialized_fields_ne =
             deserialize_fields(&fields, &Ident::new("deserialize_ne", Span::call_site()))?;
         let deserialized_fields_le =
@@ -48,12 +28,19 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
         // Return value
         let ret = {
             let fields = fields
-                .named
                 .iter()
-                .map(|field| {
-                    let ident = field.ident.as_ref().unwrap();
+                .enumerate()
+                .map(|(idx, field)| {
+                    let ident = match &field.ident {
+                        Some(ident) => quote!(#ident),
+                        None => {
+                            let idx = Index::from(idx);
+                            quote!(#idx)
+                        }
+                    };
+
                     let deserialized_name =
-                        Ident::new(&format!("deserialized_{}", ident), ident.span());
+                        Ident::new(&format!("deserialized_{}", ident), field.span());
                     quote! { #ident: #deserialized_name }
                 })
                 .collect::<Vec<_>>();
@@ -63,14 +50,6 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
                 })
             }
         };
-
-        // Add field types to where clause
-        for field in &fields.named {
-            let ty = &field.ty;
-            where_clause.predicates.push(syn::parse_quote! {
-                #ty: ::bserde::DeserializeFromBytes
-            });
-        }
 
         // Deserialize trailing padding
         let deserialize_trailing_padding = match trailing_padding {
@@ -123,47 +102,19 @@ pub fn derive_deserialize_from_bytes(input: proc_macro::TokenStream) -> proc_mac
 pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     fn inner(input: TokenStream) -> Result<TokenStream> {
         // Parse derive
-        let (name, data, generics, trailing_padding) = parse_derive(input)?;
+        let (name, fields, generics, trailing_padding) = parse_derive(input)?;
 
         // Generics
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-        let mut where_clause = where_clause.cloned().unwrap_or_else(|| WhereClause {
-            where_token: <Token![where]>::default(),
-            predicates: Punctuated::new(),
-        });
+        let (impl_generics, ty_generics, where_clause) =
+            build_generics(&generics, &fields, quote!(::bserde::SerializeAsBytes));
 
         // Serialize fields
-        let fields = match data {
-            Data::Struct(data) => match data.fields {
-                Fields::Named(fields) => fields,
-                Fields::Unnamed(_) => {
-                    return Err(Error::new(Span::call_site(), "only named structs are supported"))
-                }
-                Fields::Unit => {
-                    return Err(Error::new(Span::call_site(), "only named structs are supported"))
-                }
-            },
-            Data::Enum(_) => {
-                return Err(Error::new(Span::call_site(), "only named structs are supported"))
-            }
-            Data::Union(_) => {
-                return Err(Error::new(Span::call_site(), "only named structs are supported"))
-            }
-        };
         let serialized_fields_ne =
             serialize_fields(&fields, &Ident::new("serialize_ne", Span::call_site()))?;
         let serialized_fields_le =
             serialize_fields(&fields, &Ident::new("serialize_le", Span::call_site()))?;
         let serialized_fields_be =
             serialize_fields(&fields, &Ident::new("serialize_be", Span::call_site()))?;
-
-        // Add field types to where clause
-        for field in &fields.named {
-            let ty = &field.ty;
-            where_clause.predicates.push(syn::parse_quote! {
-                #ty: ::bserde::SerializeAsBytes
-            });
-        }
 
         // Serialize trailing padding
         let serialize_trailing_padding = match trailing_padding {
@@ -212,45 +163,94 @@ pub fn derive_serialize_as_bytes(input: proc_macro::TokenStream) -> proc_macro::
     }
 }
 
-fn parse_derive(input: TokenStream) -> Result<(Ident, Data, Generics, usize)> {
-    let ast = syn::parse2::<DeriveInput>(input).unwrap();
+fn parse_derive(input: TokenStream) -> Result<(Ident, Vec<Field>, Generics, usize)> {
+    let ast = syn::parse2::<DeriveInput>(input)?;
+
+    let fields = match ast.data {
+        Data::Struct(data) => match data.fields {
+            Fields::Named(fields) => fields.named.into_iter().collect::<Vec<_>>(),
+            Fields::Unnamed(fields) => fields.unnamed.into_iter().collect::<Vec<_>>(),
+            Fields::Unit => Vec::new(),
+        },
+        Data::Enum(_) => return Err(Error::new(Span::call_site(), "only structs are supported")),
+        Data::Union(_) => return Err(Error::new(Span::call_site(), "only structs are supported")),
+    };
+
     let trailing_padding = calc_padding(&ast.attrs, "trailing_padding")?;
 
-    Ok((ast.ident, ast.data, ast.generics, trailing_padding))
+    Ok((ast.ident, fields, ast.generics, trailing_padding))
 }
 
-fn deserialize_fields(fields: &FieldsNamed, method: &Ident) -> Result<TokenStream> {
+fn build_generics<'a>(
+    generics: &'a Generics,
+    fields: &[Field],
+    bound: TokenStream,
+) -> (ImplGenerics<'a>, TypeGenerics<'a>, WhereClause) {
+    // Split generics
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // Create where clause if it doesn't exist
+    let mut where_clause = where_clause.cloned().unwrap_or_else(|| WhereClause {
+        where_token: <Token![where]>::default(),
+        predicates: Punctuated::new(),
+    });
+
+    // Add field types to where clause
+    for field in fields {
+        let ty = &field.ty;
+        where_clause.predicates.push(syn::parse_quote! {
+            #ty: #bound
+        });
+    }
+
+    (impl_generics, ty_generics, where_clause)
+}
+
+fn deserialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
     fields
-        .named
         .iter()
-        .map(|field| {
+        .enumerate()
+        .map(|(idx, field)| {
             let deserialize_padding = match calc_padding(&field.attrs, "padding")? {
                 0 => None,
                 n => Some(quote! { read.read_exact(&mut [0; #n])?; }),
             };
             let ty = &field.ty;
-            let ident = field.ident.as_ref().unwrap();
-            let deserialized_name = Ident::new(&format!("deserialized_{}", ident), ident.span());
+            let ident = match &field.ident {
+                Some(ident) => quote!(#ident),
+                None => {
+                    let idx = Index::from(idx);
+                    quote!(#idx)
+                }
+            };
+            let deserialized_name = Ident::new(&format!("deserialized_{}", ident), field.span());
 
             Ok(quote! {
                 #deserialize_padding
                 #[allow(non_snake_case)]
-                let #deserialized_name = <#ty as ::bserde::DeserializeFromBytes>::#method(&mut read)?;
+                let #deserialized_name =
+                    <#ty as ::bserde::DeserializeFromBytes>::#method(&mut read)?;
             })
         })
         .collect::<Result<TokenStream>>()
 }
 
-fn serialize_fields(fields: &FieldsNamed, method: &Ident) -> Result<TokenStream> {
+fn serialize_fields(fields: &[Field], method: &Ident) -> Result<TokenStream> {
     fields
-        .named
         .iter()
-        .map(|field| {
+        .enumerate()
+        .map(|(idx, field)| {
             let serialize_padding = match calc_padding(&field.attrs, "padding")? {
                 0 => None,
                 n => Some(quote! { write.write_all(&[0; #n])?; }),
             };
-            let ident = &field.ident;
+            let ident = match &field.ident {
+                Some(ident) => quote!(#ident),
+                None => {
+                    let idx = Index::from(idx);
+                    quote!(#idx)
+                }
+            };
 
             Ok(quote! {
                 #serialize_padding
